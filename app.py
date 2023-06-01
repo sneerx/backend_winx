@@ -70,7 +70,7 @@ def get_films():
             'overview' : film['overview'],
             'release_date': film['release_date'],
             'genre': film['genre'],
-            'poster_path' : film['poster'],
+            'poster_path' : film['poster_path'],
             'backdrop_path' : film['backdrop_path'],
             'imdb_rating' : film['imdb_rating'],
             'duration' : film['duration'],
