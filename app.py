@@ -20,16 +20,16 @@ except Exception as e:
     print(e)
 
 
-app.config.from_object('config.config')
-# API anahtarını doğrulayan bir middleware
-def authenticate_api(func):
-    def wrapper(*args, **kwargs):
-        api_key = request.headers.get('API-Key')
-        if api_key == app.config['API_KEY']:
-            return func(*args, **kwargs)
-        else:
-            return jsonify({'error': 'Invalid API key'}), 401
-    return wrapper
+# app.config.from_object('config.config')
+# # API anahtarını doğrulayan bir middleware
+# def authenticate_api(func):
+#     def wrapper(*args, **kwargs):
+#         api_key = request.headers.get('API-Key')
+#         if api_key == app.config['API_KEY']:
+#             return func(*args, **kwargs)
+#         else:
+#             return jsonify({'error': 'Invalid API key'}), 401
+#     return wrapper
 
 
 
@@ -58,16 +58,26 @@ db = client['winx']
 
 #FİLMLERİ GETİRME
 @app.route('/api/films', methods=['GET'])
-@authenticate_api
+#@authenticate_api
 def get_films():
     # MongoDB'den tüm filmleri/dizileri al ve JSON formatında dön
     films = db['films'].find()
     result = []
     for film in films:
         result.append({
+            '_id' : str(film['_id']),  # ObjectId'i str olarak dönüştür
             'title': film['title'],
+            'overview' : film['overview'],
             'release_date': film['release_date'],
-            'genre': film['genre']
+            'genre': film['genre'],
+            'poster_path' : film['poster'],
+            'backdrop_path' : film['backdrop_path'],
+            'imdb_rating' : film['imdb_rating'],
+            'duration' : film['duration'],
+            'credits' : film['credits'],
+            'type' : film['type'],
+            'vote_average' : film['vote_average'],
+            'vote_count' : film['vote_count']
             # ...
         })
     return jsonify(result)
@@ -75,7 +85,7 @@ def get_films():
 
 #rastgele film açma // BU TAMAM.
 @app.route('/api/films/random', methods=['GET'])
-@authenticate_api
+#@authenticate_api
 def get_random_film():
     film_cursor = db.films.aggregate([{ '$sample': { 'size': 1 } }])
     film = next(film_cursor, None)
@@ -85,25 +95,6 @@ def get_random_film():
         return jsonify(film)
     else:
         return jsonify({'message': 'No films found'})
-
-
-
-#izleme listesi oluşturma
-@app.route('/api/watchlist', methods=['POST'])
-def create_watchlist():
-    # İstekten gelen verileri al
-    data = request.get_json()
-    # MongoDB'ye izleme listesi ekleyin
-    watchlist_id = db['watchlists'].insert_one(data).inserted_id
-    return jsonify({'watchlist_id': str(watchlist_id)})
-
-@app.route('/api/watchlist/<watchlist_id>', methods=['PUT'])
-def update_watchlist(watchlist_id):
-    # İstekten gelen verileri al
-    data = request.get_json()
-    # MongoDB'de izleme listesini güncelle
-    db['watchlists'].update_one({'_id': ObjectId(watchlist_id)}, {'$set': data})
-    return jsonify({'message': 'Watchlist updated'})
 
 
 
@@ -126,7 +117,6 @@ def search_films():
 
 
 #popüler içerikler
-
 @app.route('/api/popular', methods=['GET'])
 def get_popular_films():
     # MongoDB'de popüler filmleri al (örneğin, en çok izlenen veya en yüksek puan alan)
@@ -143,56 +133,79 @@ def get_popular_films():
 
 
 
-#Film detayları
+
+#BU TAMAM CALISIYOR
+#BİR FİLM GETİR.
 @app.route('/api/films/<film_id>', methods=['GET'])
 def get_film_details(film_id):
     film = db['films'].find_one({'_id': ObjectId(film_id)})
     if film:
+        film['_id'] = str(film['_id'])  # ObjectId'i str olarak dönüştür
         return jsonify(film)
     else:
         return jsonify({'message': 'Film not found'})
+    
+# #Film detayları
+# @app.route('/api/films/<film_id>', methods=['GET'])
+# def get_film_details(film_id):
+#     film = db['films'].find_one({'_id': ObjectId(film_id)})
+#     if film:
+#         return jsonify(film)
+#     else:
+#         return jsonify({'message': 'Film not found'})
 
 
 
-
-#üye olma
+#bu tamam..
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
+    name = data['name']
+    surname = data['surname']
+    e_mail = data['e_mail']
+    birth_date = data['birth_date']
     username = data['username']
     password = data['password']
     
     # Kullanıcının veritabanında mevcut olup olmadığını kontrol edin
     if db['users'].find_one({'username': username}):
-        return jsonify({'message': 'Username already exists'})
-    
+        return jsonify({'message': 'Username already exists', 'response': 404})
+    #e-mail için kontrol olabilir..
     # Şifreyi hashleyin ve kullanıcıyı veritabanına kaydedin
     hashed_password = generate_password_hash(password, method='sha256')
-    user_id = db['users'].insert_one({'username': username, 'password': hashed_password}).inserted_id
+    user_id = db['users'].insert_one({
+        'name': name,
+        'surname': surname,
+        'e_mail': e_mail,
+        'birth_date': birth_date,
+        'username': username,
+        'password': hashed_password
+    }).inserted_id
     
-    return jsonify({'user_id': str(user_id), 'message': 'User registered successfully'})
+    return jsonify({'user_id': str(user_id), 'message': 'User registered successfully', 'response': 200})
 
 
-# Kullanıcı girişi
+# Kullanıcı girişi BU TAMAM
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
     username = data['username']
     password = data['password']
+    #data['_id'] = str(data['_id'])
     
     # Kullanıcının veritabanında mevcut olup olmadığını kontrol edin
     user = db['users'].find_one({'username': username})
     if not user:
-        return jsonify({'message': 'Invalid username'})
+        return jsonify({'message': 'Invalid username','response':404})
     
     # Şifreyi doğrulayın
     if not check_password_hash(user['password'], password):
-        return jsonify({'message': 'Invalid password'})
+        return jsonify({'message': 'Invalid password','response':404})
     
-    return jsonify({'message': 'Login successful'})
+    return jsonify({'message': 'Login successful','response':200})
 
 
-#Örnek korumalı bir rotaya erişim
+#Örnek korumalı bir rotaya erişim ??
 @app.route('/api/protected', methods=['GET'])
 def protected():
     # Kullanıcının kimlik doğrulamasını kontrol edin
@@ -214,30 +227,7 @@ def protected():
 
 
 
-
-#favorileri ekleme
-@app.route('/api/favorites', methods=['POST'])
-def add_to_favorites():
-    # İstekten gelen verileri al
-    data = request.get_json()
-    # MongoDB'ye favorilere ekle
-    db['favorites'].insert_one(data)
-    return jsonify({'message': 'Added to favorites'})
-
-
-
-
-
-#favorilerden çıkarma
-@app.route('/api/favorites/<favorite_id>', methods=['DELETE'])
-def remove_from_favorites(favorite_id):
-    # MongoDB'de favoriyi sil
-    db['favorites'].delete_one({'_id': ObjectId(favorite_id)})
-    return jsonify({'message': 'Removed from favorites'})
-
-
 #puanlama
-
 @app.route('/api/rate', methods=['POST'])
 def rate_film():
     # İstekten gelen verileri al
@@ -245,6 +235,7 @@ def rate_film():
     # MongoDB'de filmi puanla
     db['ratings'].insert_one(data)
     return jsonify({'message': 'Film rated'})
+
 
 #profil görüntüleme
 @app.route('/api/profile/<user_id>', methods=['GET'])
@@ -255,8 +246,6 @@ def get_profile(user_id):
     else:
         return jsonify({'message': 'User not found'})
 
-
-
 #profil düzenleme
 @app.route('/api/profile/<user_id>', methods=['PUT'])
 def update_profile(user_id):
@@ -265,9 +254,6 @@ def update_profile(user_id):
     # MongoDB'de kullanıcı profili güncelle
     db['users'].update_one({'_id': ObjectId(user_id)}, {'$set': data})
     return jsonify({'message': 'Profile updated'})
-
-
-
 
 
 #kategorizasyon
@@ -284,8 +270,9 @@ def get_categories():
     return jsonify(result)
 
 
-#film/dizi ekleme
-@app.route('/api/films', methods=['POST'])
+
+#film/dizi ekleme    # BU tamam
+@app.route('/api/films/', methods=['POST'])
 def add_film():
     # İstekten gelen verileri al
     data = request.get_json()
@@ -294,7 +281,9 @@ def add_film():
     return jsonify({'film_id': str(film_id)})
 
 
-#film/dizi güncelleme
+
+
+#film/dizi güncelleme # bu tamam
 @app.route('/api/films/<film_id>', methods=['PUT'])
 def update_film(film_id):
     # İstekten gelen verileri al
@@ -305,8 +294,7 @@ def update_film(film_id):
 
 
 
-#film/dizi silme
-
+#film/dizi silme # bu tamam
 @app.route('/api/films/<film_id>', methods=['DELETE'])
 def delete_film(film_id):
     # MongoDB'den film/dizi sil
