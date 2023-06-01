@@ -205,6 +205,28 @@ def login():
     return jsonify({'message': 'Login successful','response':200})
 
 
+#kullanıcı bulma
+@app.route('/api/user/<user_id>', methods=['GET'])
+def get_user(user_id):
+    # Kullanıcıyı ID'ye göre bulun
+    user = db['users'].find_one({'_id': ObjectId(user_id)})
+    if user:
+        return jsonify({
+            'user_id': str(user['_id']),
+            'username': user['username'],
+            'name': user['name'],
+            'surname': user['surname'],
+            'e_mail': user['e_mail'],
+            'birth_date': user['birth_date'],
+            'message': 'User found',
+            'response': 200
+        })
+    else:
+        return jsonify({'message': 'User not found', 'response': 404})
+
+
+
+
 #Örnek korumalı bir rotaya erişim ??
 @app.route('/api/protected', methods=['GET'])
 def protected():
