@@ -9,6 +9,7 @@ app = Flask(__name__)
 
 uri = "mongodb+srv://riza:Ty8Z0E2GsDriWiRL@winx.xqlnqmm.mongodb.net/?retryWrites=true&w=majority"
 
+app.config['JSON_AS_ASCII'] = False
 # Create a new client and connect to the server
 client = MongoClient(uri)
 
@@ -83,6 +84,67 @@ def get_films():
     return jsonify(result)
 
 
+
+
+
+
+@app.route('/api/ids/<ids>', methods=['GET'])
+def get_films_by_ids(ids):
+    film_ids = ids.split(',')  # Gelen parametreleri virgülle ayrıştır
+
+    results = []
+    for film_id in film_ids:
+        film_id = ObjectId(film_id)
+        film = db['films'].find_one({'_id': film_id})
+        if film:
+            result = {
+                '_id': str(film['_id']),  # ObjectId'i str olarak dönüştür
+                'title': film['title'],
+                'overview': film['overview'],
+                'release_date': film['release_date'],
+                'genre': film['genre'],
+                'poster_path': film['poster_path'],
+                'backdrop_path': film['backdrop_path'],
+                'imdb_rating': film['imdb_rating'],
+                'duration': film['duration'],
+                'credits': film['credits'],
+                'type': film['type'],
+                'vote_average': film['vote_average'],
+                'vote_count': film['vote_count']
+                # ...
+            }
+            results.append(result)
+
+    return jsonify(results)
+
+
+
+#TV_SHOWLARI GETİRME
+@app.route('/api/tvshows', methods=['GET'])
+def get_tvshows():
+    tvshows = db['tvshows'].find()
+    result = []
+    for tvshow in tvshows:
+        result.append({
+            '_id': str(tvshow['_id']),
+            'title': tvshow['title'],
+            'overview': tvshow['overview'],
+            'release_date': tvshow['release_date'],
+            'genre': tvshow['genre'],
+            'poster_path': tvshow['poster_path'],
+            'backdrop_path': tvshow['backdrop_path'],
+            'imdb_rating': tvshow['imdb_rating'],
+            'duration': tvshow['duration'],
+            'credits': tvshow['credits'],
+            'vote_average': tvshow['vote_average'],
+            'vote_count': tvshow['vote_count']
+        })
+    return jsonify(result)
+
+
+
+
+
 #rastgele film açma // BU TAMAM.
 @app.route('/api/films/random', methods=['GET'])
 #@authenticate_api
@@ -99,7 +161,44 @@ def get_random_film():
 
 
 
-#arama
+
+
+# Rastgele TV şovu açma
+@app.route('/api/tvshows/random', methods=['GET'])
+def get_random_tvshow():
+    tvshow_cursor = db.tvshows.aggregate([{ '$sample': { 'size': 1 } }])
+    tvshow = next(tvshow_cursor, None)
+
+    if tvshow:
+        tvshow['_id'] = str(tvshow['_id'])
+        return jsonify(tvshow)
+    else:
+        return jsonify({'message': 'No TV shows found'})
+
+#BU TAMAM CALISIYOR
+#BİR FİLM GETİR.
+@app.route('/api/films/<film_id>', methods=['GET'])
+def get_film_details(film_id):
+    film = db['films'].find_one({'_id': ObjectId(film_id)})
+    if film:
+        film['_id'] = str(film['_id'])  # ObjectId'i str olarak dönüştür
+        return jsonify(film)
+    else:
+        return jsonify({'message': 'Film not found'})
+
+
+# TV şovu detaylarını getirme
+@app.route('/api/tvshows/<tvshow_id>', methods=['GET'])
+def get_tvshow_details(tvshow_id):
+    tvshow = db['tvshows'].find_one({'_id': ObjectId(tvshow_id)})
+    if tvshow:
+        tvshow['_id'] = str(tvshow['_id'])
+        return jsonify(tvshow)
+    else:
+        return jsonify({'message': 'TV show not found'})
+
+
+# arama
 @app.route('/api/search', methods=['GET'])
 def search_films():
     query = request.args.get('query')
@@ -108,9 +207,9 @@ def search_films():
     films = []
     for film in results:
         films.append({
-            'title': film['title'],
+            #'title': film['title'],
             'release_date': film['release_date'],
-            'genre': film['genre']
+            #'genre': film['genre']
             # ...
         })
     return jsonify(films)
@@ -134,16 +233,7 @@ def get_popular_films():
 
 
 
-#BU TAMAM CALISIYOR
-#BİR FİLM GETİR.
-@app.route('/api/films/<film_id>', methods=['GET'])
-def get_film_details(film_id):
-    film = db['films'].find_one({'_id': ObjectId(film_id)})
-    if film:
-        film['_id'] = str(film['_id'])  # ObjectId'i str olarak dönüştür
-        return jsonify(film)
-    else:
-        return jsonify({'message': 'Film not found'})
+
     
 # #Film detayları
 # @app.route('/api/films/<film_id>', methods=['GET'])
@@ -166,6 +256,7 @@ def register():
     birth_date = data['birth_date']
     username = data['username']
     password = data['password']
+    # vote_contents = data['vote_contents']
     
     # Kullanıcının veritabanında mevcut olup olmadığını kontrol edin
     if db['users'].find_one({'username': username}):
@@ -218,6 +309,7 @@ def get_user(user_id):
             'surname': user['surname'],
             'e_mail': user['e_mail'],
             'birth_date': user['birth_date'],
+            'vote_contents': user['vote_contents'],
             'message': 'User found',
             'response': 200
         })
@@ -324,5 +416,52 @@ def delete_film(film_id):
     return jsonify({'message': 'Film deleted'})
 
 
+# TV şovu ekleme
+@app.route('/api/tvshows/', methods=['POST'])
+def add_tvshow():
+    data = request.get_json()
+    tvshow_id = db['tvshows'].insert_one(data).inserted_id
+    return jsonify({'tvshow_id': str(tvshow_id)})
+
+# TV şovu güncelleme
+@app.route('/api/tvshows/<tvshow_id>', methods=['PUT'])
+def update_tvshow(tvshow_id):
+    # İstekten gelen verileri al
+    data = request.get_json()
+    # MongoDB'de TV şovunu güncelle
+    db['tvshows'].update_one({'_id': ObjectId(tvshow_id)}, {'$set': data})
+    return jsonify({'message': 'TV show updated'})
+
+# TV şovu silme
+@app.route('/api/tvshows/<tvshow_id>', methods=['DELETE'])
+def delete_tvshow(tvshow_id):
+    db['tvshows'].delete_one({'_id': ObjectId(tvshow_id)})
+    return jsonify({'message': 'TV show deleted'})
+
+
+# # TV şovlarını kategorilere göre getirme
+# @app.route('/api/tvshows/genres/<genre>', methods=['GET'])
+# def get_tvshows_by_genre(genre):
+#     tvshows = db['tvshows'].find({'genre': genre})
+#     result = []
+#     for tvshow in tvshows:
+#         result.append({
+#             '_id' : str(tvshow['_id']),
+#             'title': tvshow['title'],
+#             'overview' : tvshow['overview'],
+#             'release_date': tvshow['release_date'],
+#             'genre': tvshow['genre'],
+#             'poster_path' : tvshow['poster_path'],
+#             'backdrop_path' : tvshow['backdrop_path'],
+#             'imdb_rating' : tvshow['imdb_rating'],
+#             'duration' : tvshow['duration'],
+#             'credits' : tvshow['credits'],
+#             'vote_average' : tvshow['vote_average'],
+#             'vote_count' : tvshow['vote_count']
+#             # ...
+#         })
+#     return jsonify(result)
+
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True,threaded = True)
