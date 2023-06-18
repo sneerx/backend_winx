@@ -3,7 +3,6 @@ from pymongo.mongo_client import MongoClient
 from flask import Flask, jsonify, request
 import random
 from werkzeug.security import generate_password_hash, check_password_hash
-from config.config import API_KEY
 
 app = Flask(__name__)
 
