@@ -2,7 +2,10 @@ from bson import ObjectId
 from pymongo.mongo_client import MongoClient
 from flask import Flask, jsonify, request
 import random
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
+from datetime import timedelta
 
 app = Flask(__name__)
 
@@ -20,45 +23,12 @@ except Exception as e:
     print(e)
 
 
-# app.config.from_object('config.config')
-# # API anahtarını doğrulayan bir middleware
-# def authenticate_api(func):
-#     def wrapper(*args, **kwargs):
-#         api_key = request.headers.get('API-Key')
-#         if api_key == app.config['API_KEY']:
-#             return func(*args, **kwargs)
-#         else:
-#             return jsonify({'error': 'Invalid API key'}), 401
-#     return wrapper
-
 
 
 db = client['winx']
 
-# collection = db['users']
-
-# document = {"name": "John", "age": 30}
-# collection.insert_one(document)
-
-# documents = [
-#     {"name": "Alice", "age": 25},
-#     {"name": "Bob", "age": 35}
-# ]
-# collection.insert_many(documents)
-
-# #bütün belgeyi getirmek
-# cursor = collection.find()
-# for document in cursor:
-#     print(document)
-
-# # Belirli bir belgeyi getirmek
-# document = collection.find_one({"name": "John"})
-# print(document)
-
-
 #FİLMLERİ GETİRME
 @app.route('/api/films', methods=['GET'])
-#@authenticate_api
 def get_films():
     # MongoDB'den tüm filmleri/dizileri al ve JSON formatında dön
     films = db['films'].find()
@@ -136,43 +106,11 @@ def get_tvshows():
             'duration': tvshow['duration'],
             'credits': tvshow['credits'],
             'vote_average': tvshow['vote_average'],
-            'vote_count': tvshow['vote_count']
+            'vote_count': tvshow['vote_count'],
+            'number_of_seasons' : tvshow['number_of_seasons'],
+            'number_of_episodes' : tvshow['number_of_episodes']
         })
     return jsonify(result)
-
-
-
-
-
-#rastgele film açma // BU TAMAM.
-@app.route('/api/films/random', methods=['GET'])
-#@authenticate_api
-def get_random_film():
-    film_cursor = db.films.aggregate([{ '$sample': { 'size': 1 } }])
-    film = next(film_cursor, None)
-
-    if film:
-        film['_id'] = str(film['_id'])  # ObjectId'i stringe dönüştürme
-        return jsonify(film)
-    else:
-        return jsonify({'message': 'No films found'})
-
-
-
-
-
-
-# Rastgele TV şovu açma
-@app.route('/api/tvshows/random', methods=['GET'])
-def get_random_tvshow():
-    tvshow_cursor = db.tvshows.aggregate([{ '$sample': { 'size': 1 } }])
-    tvshow = next(tvshow_cursor, None)
-
-    if tvshow:
-        tvshow['_id'] = str(tvshow['_id'])
-        return jsonify(tvshow)
-    else:
-        return jsonify({'message': 'No TV shows found'})
 
 #BU TAMAM CALISIYOR
 #BİR FİLM GETİR.
@@ -214,85 +152,241 @@ def search_films():
     return jsonify(films)
 
 
-#popüler içerikler
-@app.route('/api/popular', methods=['GET'])
+#popüler içerikler / films
+@app.route('/api/films/popular', methods=['GET'])
 def get_popular_films():
     # MongoDB'de popüler filmleri al (örneğin, en çok izlenen veya en yüksek puan alan)
-    films = db['films'].find().sort('views', -1).limit(10)
+    films = db['films'].find().sort('release_date', -1).limit(3)
     result = []
     for film in films:
         result.append({
+            '_id' : str(film['_id']),  # ObjectId'i str olarak dönüştür
             'title': film['title'],
+            'overview' : film['overview'],
             'release_date': film['release_date'],
-            'genre': film['genre']
-            # ...
+            'genre': film['genre'],
+            'poster_path' : film['poster_path'],
+            'backdrop_path' : film['backdrop_path'],
+            'imdb_rating' : film['imdb_rating'],
+            'duration' : film['duration'],
+            'credits' : film['credits'],
+            'type' : film['type'],
+            'vote_average' : film['vote_average'],
+            'vote_count' : film['vote_count']
+            
         })
     return jsonify(result)
 
+#popüler içerikler / tvshows
+@app.route('/api/tvshows/popular', methods=['GET'])
+def get_popular_tvshows():
+    # MongoDB'de popüler dizi al (örneğin, en çok izlenen veya en yüksek puan alan)
+    tvshows = db['tvshows'].find().sort('release_date', -1).limit(3)
+    result = []
+    for tvshow in tvshows:
+        result.append({
+            '_id': str(tvshow['_id']),
+            'title': tvshow['title'],
+            'overview': tvshow['overview'],
+            'release_date': tvshow['release_date'],
+            'genre': tvshow['genre'],
+            'poster_path': tvshow['poster_path'],
+            'backdrop_path': tvshow['backdrop_path'],
+            'imdb_rating': tvshow['imdb_rating'],
+            'duration': tvshow['duration'],
+            'credits': tvshow['credits'],
+            'vote_average': tvshow['vote_average'],
+            'vote_count': tvshow['vote_count'],
+            'number_of_seasons' : tvshow['number_of_seasons'],
+            'number_of_episodes' : tvshow['number_of_episodes']
+            
+        })
+    return jsonify(result)
+
+@app.route('/api/films/top', methods=['GET'])
+def get_top_films():
+    # IMDB puanına göre filmleri sıralama işlemi
+    top_films = db['films'].find().sort('imdb_rating', -1)  # Yüksek puana göre sıralama
+    films = []
+    for film in top_films:
+        films.append({
+            '_id' : str(film['_id']),  # ObjectId'i str olarak dönüştür
+            'title': film['title'],
+            'overview' : film['overview'],
+            'release_date': film['release_date'],
+            'genre': film['genre'],
+            'poster_path' : film['poster_path'],
+            'backdrop_path' : film['backdrop_path'],
+            'imdb_rating' : film['imdb_rating'],
+            'duration' : film['duration'],
+            'credits' : film['credits'],
+            'type' : film['type'],
+            'vote_average' : film['vote_average'],
+            'vote_count' : film['vote_count']
+            
+        })
+    return jsonify(films)
+
+from datetime import datetime
+
+@app.route('/api/films/upcoming', methods=['GET'])
+def get_upcoming_films():
+    # Yaklaşan filmleri sıralama işlemi
+    upcoming_films = db['films'].find({'release_date': {'$gte': datetime.today()}}).sort('release_date', 1)  # Tarihe göre sıralama
+    films = []
+    for film in upcoming_films:
+        films.append({
+            '_id' : str(film['_id']),  # ObjectId'i str olarak dönüştür
+            'title': film['title'],
+            'overview' : film['overview'],
+            'release_date': film['release_date'],
+            'genre': film['genre'],
+            'poster_path' : film['poster_path'],
+            'backdrop_path' : film['backdrop_path'],
+            'imdb_rating' : film['imdb_rating'],
+            'duration' : film['duration'],
+            'credits' : film['credits'],
+            'type' : film['type'],
+            'vote_average' : film['vote_average'],
+            'vote_count' : film['vote_count']
+        })
+    return jsonify(films)
+
+@app.route('/api/tvshows/top', methods=['GET'])
+def get_top_tvshows():
+    # IMDB puanına göre TV şovlarını sıralama işlemi
+    top_tvshows = db['tvshows'].find().sort('imdb_rating', -1)  # Yüksek puana göre sıralama
+    tvshows = []
+    for tvshow in top_tvshows:
+        tvshows.append({
+            '_id': str(tvshow['_id']),
+            'title': tvshow['title'],
+            'overview': tvshow['overview'],
+            'release_date': tvshow['release_date'],
+            'genre': tvshow['genre'],
+            'poster_path': tvshow['poster_path'],
+            'backdrop_path': tvshow['backdrop_path'],
+            'imdb_rating': tvshow['imdb_rating'],
+            'duration': tvshow['duration'],
+            'credits': tvshow['credits'],
+            'vote_average': tvshow['vote_average'],
+            'vote_count': tvshow['vote_count'],
+            'number_of_seasons' : tvshow['number_of_seasons'],
+            'number_of_episodes' : tvshow['number_of_episodes']
+            
+        })
+    return jsonify(tvshows)
+
+@app.route('/api/tvshows/upcoming', methods=['GET'])
+def get_upcoming_tvshows():
+    # Yaklaşan TV şovlarını sıralama işlemi
+    upcoming_tvshows = db['tvshows'].find({'release_date': {'$gte': datetime.today()}}).sort('release_date', 1)  # Tarihe göre sıralama
+    tvshows = []
+    for tvshow in upcoming_tvshows:
+        tvshows.append({
+            '_id': str(tvshow['_id']),
+            'title': tvshow['title'],
+            'overview': tvshow['overview'],
+            'release_date': tvshow['release_date'],
+            'genre': tvshow['genre'],
+            'poster_path': tvshow['poster_path'],
+            'backdrop_path': tvshow['backdrop_path'],
+            'imdb_rating': tvshow['imdb_rating'],
+            'duration': tvshow['duration'],
+            'credits': tvshow['credits'],
+            'vote_average': tvshow['vote_average'],
+            'vote_count': tvshow['vote_count'],
+            'number_of_seasons' : tvshow['number_of_seasons'],
+            'number_of_episodes' : tvshow['number_of_episodes']
+        })
+    return jsonify(tvshows)
 
 
 
 
-    
-# #Film detayları
-# @app.route('/api/films/<film_id>', methods=['GET'])
-# def get_film_details(film_id):
-#     film = db['films'].find_one({'_id': ObjectId(film_id)})
-#     if film:
-#         return jsonify(film)
-#     else:
-#         return jsonify({'message': 'Film not found'})
+
+# MongoDB session configuration
+app.config['SECRET_KEY'] = '31'
+app.config['SESSION_TYPE'] = 'mongodb'
+app.config['SESSION_MONGODB'] = MongoClient(uri)
+app.config['SESSION_MONGODB_DB'] = 'winx'
+app.config['SESSION_MONGODB_COLLECTION'] = 'sessions'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
+
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+class User(UserMixin):
+    def __init__(self, user_data):
+        self.id = str(user_data['_id'])
+        self.username = user_data['username']
+        self.password = user_data['password']
+
+    @staticmethod
+    def get(user_id):
+        user_data = db['users'].find_one({'_id': user_id})
+        if user_data:
+            return User(user_data)
+        return None
 
 
+@login_manager.user_loader
+def load_user(user_id):
+    return User.get(user_id)
 
-#bu tamam..
+
 @app.route('/api/register', methods=['POST'])
 def register():
     data = request.get_json()
     name = data['name']
-    surname = data['surname']
-    e_mail = data['e_mail']
-    birth_date = data['birth_date']
+    email = data['email']
     username = data['username']
     password = data['password']
-    # vote_contents = data['vote_contents']
-    
-    # Kullanıcının veritabanında mevcut olup olmadığını kontrol edin
+
     if db['users'].find_one({'username': username}):
         return jsonify({'message': 'Username already exists', 'response': 404})
-    #e-mail için kontrol olabilir..
-    # Şifreyi hashleyin ve kullanıcıyı veritabanına kaydedin
+
     hashed_password = generate_password_hash(password, method='sha256')
     user_id = db['users'].insert_one({
         'name': name,
-        'surname': surname,
-        'e_mail': e_mail,
-        'birth_date': birth_date,
+        'email': email,
         'username': username,
         'password': hashed_password
     }).inserted_id
-    
+
     return jsonify({'user_id': str(user_id), 'message': 'User registered successfully', 'response': 200})
 
 
-# Kullanıcı girişi BU TAMAM
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.get_json()
     username = data['username']
     password = data['password']
-    #data['_id'] = str(data['_id'])
-    
-    # Kullanıcının veritabanında mevcut olup olmadığını kontrol edin
+
     user = db['users'].find_one({'username': username})
     if not user:
-        return jsonify({'message': 'Invalid username','response':404})
-    
-    # Şifreyi doğrulayın
+        return jsonify({'message': 'Invalid username', 'response': 404})
+
     if not check_password_hash(user['password'], password):
-        return jsonify({'message': 'Invalid password','response':404})
-    
-    return jsonify({'message': 'Login successful','response':200})
+        return jsonify({'message': 'Invalid password', 'response': 404})
+
+    user_obj = User(user)
+    login_user(user_obj)
+
+    token = jwt.encode({'user_id': user_obj.id}, app.config['SECRET_KEY'], algorithm='HS256')
+
+    return jsonify({'message': 'Login successful', 'token': token, 'response': 200})
+
+
+
+@app.route('/api/logout', methods=['POST',"GET"])
+@login_required
+def logout():
+    logout_user()
+    return jsonify({'message': 'Logout successful', 'response': 200})
+
+
+
 
 
 #kullanıcı bulma
@@ -305,40 +399,13 @@ def get_user(user_id):
             'user_id': str(user['_id']),
             'username': user['username'],
             'name': user['name'],
-            'surname': user['surname'],
-            'e_mail': user['e_mail'],
-            'birth_date': user['birth_date'],
+            'email': user['email'],
             'vote_contents': user['vote_contents'],
             'message': 'User found',
             'response': 200
         })
     else:
         return jsonify({'message': 'User not found', 'response': 404})
-
-
-
-
-#Örnek korumalı bir rotaya erişim ??
-@app.route('/api/protected', methods=['GET'])
-def protected():
-    # Kullanıcının kimlik doğrulamasını kontrol edin
-    token = request.headers.get('Authorization')
-    if not token:
-        return jsonify({'message': 'Unauthorized'})
-    
-    # Token'ı kontrol edin ve kullanıcıyı doğrulayın
-    # Burada daha güvenli bir kimlik doğrulama yöntemi kullanabilirsiniz (ör. JWT)
-    # Örneği basit tutmak için token'ı doğrudan kullanıcı adı olarak kabul edelim
-    username = token
-    
-    # Kullanıcının veritabanında mevcut olup olmadığını kontrol edin
-    user = db['users'].find_one({'username': username})
-    if not user:
-        return jsonify({'message': 'Invalid user'})
-    
-    return jsonify({'message': 'Protected resource'})
-
-
 
 #puanlama
 @app.route('/api/rate', methods=['POST'])
@@ -382,6 +449,17 @@ def get_categories():
         })
     return jsonify(result)
 
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    users = db['users'].find()
+    user_list = []
+    for user in users:
+        user_data = {
+            'id': str(user['_id']),
+            'username': user['username']
+        }
+        user_list.append(user_data)
+    return jsonify({'users': user_list, 'response': 200})
 
 
 #film/dizi ekleme    # BU tamam
@@ -437,29 +515,6 @@ def delete_tvshow(tvshow_id):
     db['tvshows'].delete_one({'_id': ObjectId(tvshow_id)})
     return jsonify({'message': 'TV show deleted'})
 
-
-# # TV şovlarını kategorilere göre getirme
-# @app.route('/api/tvshows/genres/<genre>', methods=['GET'])
-# def get_tvshows_by_genre(genre):
-#     tvshows = db['tvshows'].find({'genre': genre})
-#     result = []
-#     for tvshow in tvshows:
-#         result.append({
-#             '_id' : str(tvshow['_id']),
-#             'title': tvshow['title'],
-#             'overview' : tvshow['overview'],
-#             'release_date': tvshow['release_date'],
-#             'genre': tvshow['genre'],
-#             'poster_path' : tvshow['poster_path'],
-#             'backdrop_path' : tvshow['backdrop_path'],
-#             'imdb_rating' : tvshow['imdb_rating'],
-#             'duration' : tvshow['duration'],
-#             'credits' : tvshow['credits'],
-#             'vote_average' : tvshow['vote_average'],
-#             'vote_count' : tvshow['vote_count']
-#             # ...
-#         })
-#     return jsonify(result)
 
 
 if __name__ == '__main__':
