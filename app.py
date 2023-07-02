@@ -5,6 +5,7 @@ import random
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
+import requests
 from datetime import timedelta
 
 app = Flask(__name__)
@@ -14,6 +15,8 @@ uri = "mongodb+srv://riza:Ty8Z0E2GsDriWiRL@winx.xqlnqmm.mongodb.net/?retryWrites
 app.config['JSON_AS_ASCII'] = False
 # Create a new client and connect to the server
 client = MongoClient(uri)
+
+db = client['winx']
 
 # Send a ping to confirm a successful connection
 try:
@@ -25,7 +28,40 @@ except Exception as e:
 
 
 
-db = client['winx']
+# MongoDB session configuration
+app.config['SECRET_KEY'] = '31'
+app.config['SESSION_TYPE'] = 'mongodb'
+app.config['SESSION_MONGODB'] = MongoClient(uri)
+app.config['SESSION_MONGODB_DB'] = 'winx'
+app.config['SESSION_MONGODB_COLLECTION'] = 'sessions'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+
+class User(UserMixin):
+    def __init__(self, user_data):
+        self.id = str(user_data['_id'])
+        self.name = user_data['name']
+        self.username = user_data['username']
+        self.email = user_data['email']
+        self.password = user_data['password']
+
+    @staticmethod
+    def get(user_id):
+        user_data = db['users'].find_one({'_id': user_id})
+        if user_data:
+            return User(user_data)
+        return None
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.get(user_id)
+
+
 
 #FİLMLERİ GETİRME
 @app.route('/api/films', methods=['GET'])
@@ -135,7 +171,7 @@ def get_tvshow_details(tvshow_id):
         return jsonify({'message': 'TV show not found'})
 
 
-# arama
+# arama / film
 @app.route('/api/search', methods=['GET'])
 def search_films():
     query = request.args.get('query')
@@ -305,34 +341,7 @@ def get_upcoming_tvshows():
 
 
 
-# MongoDB session configuration
-app.config['SECRET_KEY'] = '31'
-app.config['SESSION_TYPE'] = 'mongodb'
-app.config['SESSION_MONGODB'] = MongoClient(uri)
-app.config['SESSION_MONGODB_DB'] = 'winx'
-app.config['SESSION_MONGODB_COLLECTION'] = 'sessions'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
 
-login_manager = LoginManager(app)
-login_manager.login_view = 'login'
-
-class User(UserMixin):
-    def __init__(self, user_data):
-        self.id = str(user_data['_id'])
-        self.username = user_data['username']
-        self.password = user_data['password']
-
-    @staticmethod
-    def get(user_id):
-        user_data = db['users'].find_one({'_id': user_id})
-        if user_data:
-            return User(user_data)
-        return None
-
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.get(user_id)
 
 
 @app.route('/api/register', methods=['POST'])
@@ -354,7 +363,15 @@ def register():
         'password': hashed_password
     }).inserted_id
 
-    return jsonify({'user_id': str(user_id), 'message': 'User registered successfully', 'response': 200})
+    user_data = {
+        'id': str(user_id),
+        'name': name,
+        'email': email,
+        'username': username,
+        'password': hashed_password
+    }
+
+    return jsonify({'user': user_data, 'message': 'User registered successfully', 'response': 200})
 
 
 @app.route('/api/login', methods=['POST'])
@@ -375,16 +392,22 @@ def login():
 
     token = jwt.encode({'user_id': user_obj.id}, app.config['SECRET_KEY'], algorithm='HS256')
 
-    return jsonify({'message': 'Login successful', 'token': token, 'response': 200})
+    user_data = {
+        'id': user_obj.id,
+        'name': user_obj.name,
+        'email': user_obj.email,
+        'username': user_obj.username,
+        'password': user_obj.password
+    }
+
+    return jsonify({'user': user_data, 'message': 'Login successful', 'token': token, 'response': 200})
 
 
-
-@app.route('/api/logout', methods=['POST',"GET"])
+@app.route('/api/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
     return jsonify({'message': 'Logout successful', 'response': 200})
-
 
 
 
@@ -400,7 +423,7 @@ def get_user(user_id):
             'username': user['username'],
             'name': user['name'],
             'email': user['email'],
-            'vote_contents': user['vote_contents'],
+            'password' : user['password'],
             'message': 'User found',
             'response': 200
         })
@@ -417,14 +440,16 @@ def rate_film():
     return jsonify({'message': 'Film rated'})
 
 
-#profil görüntüleme
 @app.route('/api/profile/<user_id>', methods=['GET'])
 def get_profile(user_id):
     user = db['users'].find_one({'_id': ObjectId(user_id)})
     if user:
+        user['_id'] = str(user['_id'])
         return jsonify(user)
     else:
         return jsonify({'message': 'User not found'})
+    
+
 
 #profil düzenleme
 @app.route('/api/profile/<user_id>', methods=['PUT'])
@@ -436,18 +461,19 @@ def update_profile(user_id):
     return jsonify({'message': 'Profile updated'})
 
 
-#kategorizasyon
-@app.route('/api/categories', methods=['GET'])
-def get_categories():
-    categories = db['categories'].find()
-    result = []
-    for category in categories:
-        result.append({
-            'name': category['name'],
-            'description': category['description']
-            # ...
-        })
-    return jsonify(result)
+# #kategorizasyon
+# @app.route('/api/categories', methods=['GET'])
+# def get_categories():
+#     categories = db['categories'].find()
+#     result = []
+#     for category in categories:
+#         result.append({
+#             'name': category['name'],
+#             'description': category['description']
+#             # ...
+#         })
+#     return jsonify(result)
+
 
 @app.route('/api/users', methods=['GET'])
 def get_users():
@@ -485,7 +511,7 @@ def update_film(film_id):
 
 
 
-#film/dizi silme # bu tamam
+#film silme # bu tamam
 @app.route('/api/films/<film_id>', methods=['DELETE'])
 def delete_film(film_id):
     # MongoDB'den film/dizi sil
