@@ -172,7 +172,7 @@ def get_tvshow_details(tvshow_id):
 
 
 # arama / film
-@app.route('/api/search', methods=['GET'])
+@app.route('/api/films/search', methods=['GET'])
 def search_films():
     query = request.args.get('query')
     # MongoDB'de arama yap
@@ -180,12 +180,46 @@ def search_films():
     films = []
     for film in results:
         films.append({
-            #'title': film['title'],
+            '_id' : str(film['_id']),  # ObjectId'i str olarak dönüştür
+            'title': film['title'],
+            'overview' : film['overview'],
             'release_date': film['release_date'],
-            #'genre': film['genre']
-            # ...
+            'genre': film['genre'],
+            'poster_path' : film['poster_path'],
+            'backdrop_path' : film['backdrop_path'],
+            'imdb_rating' : film['imdb_rating'],
+            'duration' : film['duration'],
+            'credits' : film['credits'],
+            'type' : film['type'],
+            'vote_average' : film['vote_average'],
+            'vote_count' : film['vote_count']
         })
     return jsonify(films)
+
+#search / tvshows
+@app.route('/api/tvshows/search', methods=['GET'])
+def search_tvshows():
+    query = request.args.get('query')
+    results = db['tvshows'].find({'title': {'$regex': query, '$options': 'i'}})
+    tvshows = []
+    for tvshow in results:
+        tvshows.append({
+            '_id': str(tvshow['_id']),
+            'title': tvshow['title'],
+            'overview': tvshow['overview'],
+            'release_date': tvshow['release_date'],
+            'genre': tvshow['genre'],
+            'poster_path': tvshow['poster_path'],
+            'backdrop_path': tvshow['backdrop_path'],
+            'imdb_rating': tvshow['imdb_rating'],
+            'duration': tvshow['duration'],
+            'credits': tvshow['credits'],
+            'vote_average': tvshow['vote_average'],
+            'vote_count': tvshow['vote_count'],
+            'number_of_seasons': tvshow['number_of_seasons'],
+            'number_of_episodes': tvshow['number_of_episodes']
+        })
+    return jsonify(tvshows)
 
 
 #popüler içerikler / films
@@ -263,30 +297,62 @@ def get_top_films():
         })
     return jsonify(films)
 
+
+#rastgele film açma // BU TAMAM.
+@app.route('/api/films/random', methods=['GET'])
+#@authenticate_api
+def get_random_film():
+    film_cursor = db.films.aggregate([{ '$sample': { 'size': 1 } }])
+    film = next(film_cursor, None)
+
+    if film:
+        film['_id'] = str(film['_id'])  # ObjectId'i stringe dönüştürme
+        return jsonify(film)
+    else:
+        return jsonify({'message': 'No films found'})
+    
+
+
+
+# Rastgele TV şovu açma
+@app.route('/api/tvshows/random', methods=['GET'])
+def get_random_tvshow():
+    tvshow_cursor = db.tvshows.aggregate([{ '$sample': { 'size': 1 } }])
+    tvshow = next(tvshow_cursor, None)
+
+    if tvshow:
+        tvshow['_id'] = str(tvshow['_id'])
+        return jsonify(tvshow)
+    else:
+        return jsonify({'message': 'No TV shows found'})
+    
+
+
 from datetime import datetime
 
 @app.route('/api/films/upcoming', methods=['GET'])
 def get_upcoming_films():
-    # Yaklaşan filmleri sıralama işlemi
-    upcoming_films = db['films'].find({'release_date': {'$gte': datetime.today()}}).sort('release_date', 1)  # Tarihe göre sıralama
+    # Tüm yaklaşan filmleri getirme işlemi
+    upcoming_films = db['films_upcoming'].find()
     films = []
     for film in upcoming_films:
         films.append({
-            '_id' : str(film['_id']),  # ObjectId'i str olarak dönüştür
+            '_id': str(film['_id']),  # ObjectId'i str olarak dönüştür
             'title': film['title'],
-            'overview' : film['overview'],
-            'release_date': film['release_date'],
+            'overview': film['overview'],
+            'first_air_date': film['first_air_date'],
             'genre': film['genre'],
-            'poster_path' : film['poster_path'],
-            'backdrop_path' : film['backdrop_path'],
-            'imdb_rating' : film['imdb_rating'],
-            'duration' : film['duration'],
-            'credits' : film['credits'],
-            'type' : film['type'],
-            'vote_average' : film['vote_average'],
-            'vote_count' : film['vote_count']
+            'poster_path': film['poster_path'],
+            'backdrop_path': film['backdrop_path'],
+            'duration': film['duration'],
+            'credits': film['credits'],
+            'type': film['type'],
         })
     return jsonify(films)
+
+
+
+
 
 @app.route('/api/tvshows/top', methods=['GET'])
 def get_top_tvshows():
@@ -313,30 +379,29 @@ def get_top_tvshows():
         })
     return jsonify(tvshows)
 
+
+
+
+
+
 @app.route('/api/tvshows/upcoming', methods=['GET'])
 def get_upcoming_tvshows():
-    # Yaklaşan TV şovlarını sıralama işlemi
-    upcoming_tvshows = db['tvshows'].find({'release_date': {'$gte': datetime.today()}}).sort('release_date', 1)  # Tarihe göre sıralama
+    # Tüm yaklaşan TV şovlarını getirme işlemi
+    upcoming_tvshows = db['tvshows_upcoming'].find()
     tvshows = []
     for tvshow in upcoming_tvshows:
         tvshows.append({
-            '_id': str(tvshow['_id']),
+            '_id': str(tvshow['_id']),  # ObjectId'i str olarak dönüştür
             'title': tvshow['title'],
             'overview': tvshow['overview'],
-            'release_date': tvshow['release_date'],
+            'first_air_date': tvshow['first_air_date'],
             'genre': tvshow['genre'],
             'poster_path': tvshow['poster_path'],
             'backdrop_path': tvshow['backdrop_path'],
-            'imdb_rating': tvshow['imdb_rating'],
-            'duration': tvshow['duration'],
-            'credits': tvshow['credits'],
-            'vote_average': tvshow['vote_average'],
-            'vote_count': tvshow['vote_count'],
-            'number_of_seasons' : tvshow['number_of_seasons'],
-            'number_of_episodes' : tvshow['number_of_episodes']
+            'type': tvshow['type'],
+ 
         })
     return jsonify(tvshows)
-
 
 
 
@@ -403,13 +468,17 @@ def login():
     return jsonify({'user': user_data, 'message': 'Login successful', 'token': token, 'response': 200})
 
 
-@app.route('/api/logout', methods=['POST'])
+
+
+
+
+
+
+@app.route('/api/logout', methods=['GET'])
 @login_required
 def logout():
     logout_user()
     return jsonify({'message': 'Logout successful', 'response': 200})
-
-
 
 
 #kullanıcı bulma
