@@ -337,16 +337,19 @@ def get_upcoming_films():
     films = []
     for film in upcoming_films:
         films.append({
-            '_id': str(film['_id']),  # ObjectId'i str olarak dönüştür
+            '_id' : str(film['_id']),  # ObjectId'i str olarak dönüştür
             'title': film['title'],
-            'overview': film['overview'],
-            'first_air_date': film['first_air_date'],
+            'overview' : film['overview'],
+            'release_date': film['release_date'],
             'genre': film['genre'],
-            'poster_path': film['poster_path'],
-            'backdrop_path': film['backdrop_path'],
-            'duration': film['duration'],
-            'credits': film['credits'],
-            'type': film['type'],
+            'poster_path' : film['poster_path'],
+            'backdrop_path' : film['backdrop_path'],
+            'imdb_rating' : film['imdb_rating'],
+            'duration' : film['duration'],
+            'credits' : film['credits'],
+            'type' : film['type'],
+            'vote_average' : film['vote_average'],
+            'vote_count' : film['vote_count']
         })
     return jsonify(films)
 
@@ -391,14 +394,20 @@ def get_upcoming_tvshows():
     tvshows = []
     for tvshow in upcoming_tvshows:
         tvshows.append({
-            '_id': str(tvshow['_id']),  # ObjectId'i str olarak dönüştür
+            '_id': str(tvshow['_id']),
             'title': tvshow['title'],
             'overview': tvshow['overview'],
-            'first_air_date': tvshow['first_air_date'],
+            'release_date': tvshow['release_date'],
             'genre': tvshow['genre'],
             'poster_path': tvshow['poster_path'],
             'backdrop_path': tvshow['backdrop_path'],
-            'type': tvshow['type'],
+            'imdb_rating': tvshow['imdb_rating'],
+            'duration': tvshow['duration'],
+            'credits': tvshow['credits'],
+            'vote_average': tvshow['vote_average'],
+            'vote_count': tvshow['vote_count'],
+            'number_of_seasons' : tvshow['number_of_seasons'],
+            'number_of_episodes' : tvshow['number_of_episodes']
  
         })
     return jsonify(tvshows)
